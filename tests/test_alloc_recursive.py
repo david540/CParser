@@ -20,8 +20,8 @@ def test_recursive(tmp_path: Path):
     print(cgen)
 
     # prototype
-    assert "struct Node* alloc_Node(int d, int max_d)" in cgen
+    assert "struct Node* alloc_struct_Node(int d, int max_d)" in cgen
 
     # corps : doit appeler alloc_Node sur next
-    pattern = r"out->next\s*=\s*alloc_Node\(d \+ 1, max_d\);"
+    pattern = r"out->next\s*=\s*alloc_struct_Node\(d \+ 1, max_d\);"
     assert re.search(pattern, cgen)

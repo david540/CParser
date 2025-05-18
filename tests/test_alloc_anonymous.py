@@ -20,6 +20,7 @@ def test_anonymous(tmp_path: Path):
     # prototypes pour alias valeur + pointeur
     assert "Rec* alloc_Rec(" in cgen
     assert "pRec alloc_pRec(" in cgen
+    assert "struct Rec *" not in cgen
 
     # pRec doit simplement faire return alloc_Rec
     assert re.search(r"return\s+alloc_Rec\(d,\s*max_d\);", cgen)

@@ -2,7 +2,8 @@ from extractor import extract_structs
 
 def test_pointer_alias(tmp_path):
     code = r"""
-        struct Foo { double x; };
+        struct Foo;
+        typedef struct Foo Foo;
         typedef struct Foo* pFoo;
     """
     cfile = tmp_path / "t3.c"
@@ -11,8 +12,6 @@ def test_pointer_alias(tmp_path):
     name_map, ptr_map = extract_structs(cfile)
     fields = [("double", "x")]
 
-    assert name_map["struct Foo"] == fields
-    assert ptr_map["pFoo"] == fields
     
-    assert len(name_map.keys()) == 1
-    assert len(ptr_map.keys()) == 1
+    assert len(name_map.keys()) == 0
+    assert len(ptr_map.keys()) == 0

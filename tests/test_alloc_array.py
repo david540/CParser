@@ -27,7 +27,7 @@ def test_array_allocation(tmp_path):
     code = generate_allocators(name_map, ptr_map)
 
     # Verify the generated code contains array handling
-    assert "alloc_ArrayStruct" in code
-    assert "alloc_Inner" in code
+    assert "alloc_struct_ArrayStruct" in code
+    assert "alloc_struct_Inner" in code
     assert "tis_alloc_safe" in code
     assert "tis_make_unknown" in code 

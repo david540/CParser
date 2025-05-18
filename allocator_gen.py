@@ -29,8 +29,9 @@ def clean_key(key: str) -> str:
     """ 'struct Foo**'   -> 'Foo'
         ' Bar * '        -> 'Bar'
         'pBaz'           -> 'pBaz'  """
-    key = re.sub(r'^struct\s+', '', key)   # retire le préfixe «struct »
-    key = key.strip().replace(' ', '')     # espaces internes & bords
+    #key = re.sub(r'^union\s+', '', key)   # retire le préfixe «struct »
+    #key = re.sub(r'^struct\s+', '', key)   # retire le préfixe «struct »
+    key = key.strip().replace(' ', '_')     # espaces internes & bords
     key = _star_re.sub('', key)            # toute traîne d’*
     return key
 
@@ -52,10 +53,9 @@ def is_struct_type(type_str: str, struct_names: set[str]) -> bool:
 # génération ------------------------------------------------------------------
 ###############################################################################
 PRELUDE = """\
-#include <stddef.h>
-
-extern void *tis_alloc_safe(size_t);
-extern void  tis_make_unknown(void*, size_t);
+//#include <stddef.h>
+//extern void *tis_alloc_safe(size_t);
+//extern void  tis_make_unknown(void*, size_t);
 """
 
 ALLOC_TPL = """\
@@ -71,7 +71,7 @@ ALLOC_TPL = """\
 def make_body(fields: Fields,
               struct_names: set[str]) -> str:
     lines: List[str] = []
-    lines.append("    if(d < max_d - 1) {")
+    lines.append("if(d < max_d - 1) {")
     for f_type, f_name in fields:
         depth = ptr_depth(f_type)
         base  = re.sub(r"\\s*\\*+$", "", f_type).strip()
@@ -80,21 +80,21 @@ def make_body(fields: Fields,
         if depth == 1 and is_struct_type(base, struct_names):
             callee = clean_key(base)
             lines.append(
-                f"        out->{f_name} = alloc_{callee}(d + 1, max_d);"
+                f"    out->{f_name} = alloc_{callee}(d + 1, max_d);"
             )
         # ---- valeur d’une struct connue -------------------------------------
         elif depth == 0 and is_struct_type(base, struct_names):
             callee = clean_key(base)
             lines.append(
-                f"        out->{f_name} = *alloc_{callee}(d + 1, max_d);"
+                f"    out->{f_name} = *alloc_{callee}(d + 1, max_d);"
             )
         # ---- sinon : mémoire inconnue ---------------------------------------
-        elif depth >= 1:
+        elif depth == 1 and not "[" in f_type and not "[" in f_name:
             lines.append(
-                f"        out->{f_name} = tis_alloc_safe(128);"
+                f"    out->{f_name} = tis_alloc_safe(128);"
             )
             lines.append(
-                f"        tis_make_unknown(out->{f_name}, 128);"
+                f"    tis_make_unknown(out->{f_name}, 128);"
             )
         else:
             # champ scalaire : rien à faire, on l’a déjà « unknown-é »
@@ -108,36 +108,43 @@ def generate_allocators(name_map: Dict[str, Fields],
     struct_names = set(name_map)  # toutes les alias « valeur »
     parts: List[str] = [PRELUDE]
 
-    # 1) d’abord les alias valeur (inclut « struct Foo »)
-    for key, fields in name_map.items():
-        fname       = clean_key(key)
-        struct_type = f"struct {fname}*" if key.startswith("struct ") else f"{fname}*"
-        ret_type    = struct_type
-        body        = make_body(fields, struct_names)
-        parts.append(
-            ALLOC_TPL.format(
-                ret_type=ret_type,
-                fname=fname,
-                struct_type=struct_type,
-                body=indent(body, "    "),
-            )
-        )
+    for iter in [0,1]:
+        # 1) d’abord les alias valeur (inclut « struct Foo »)
+        for key, fields in name_map.items():
+            fname       = clean_key(key)
+            struct_type = f"{key}*" 
+            ret_type    = struct_type
+            body        = make_body(fields, struct_names)
+            if iter == 0: 
+                parts.append(f"{ret_type} alloc_{fname}(int d, int max_d);\n")
+            else:
+                parts.append(
+                    ALLOC_TPL.format(
+                        ret_type=ret_type,
+                        fname=fname,
+                        struct_type=struct_type,
+                        body=indent(body, "    "),
+                    )
+                )
 
-    # 2) puis les alias pointeurs simples  -----------------------------------
-    for key, fields in ptr_map.items():
-        fname    = clean_key(key)
-        # retrouve le vrai nom de struct pour appeler le bon alloc_…
-        # (on suppose qu’au moins un alias valeur possède exactement le même
-        #   tableau de champs).
-        target_alias = next(
-            k for k, v in name_map.items() if v == fields
-        )
-        callee = clean_key(target_alias)
-        parts.append(
-            f"{key} alloc_{fname}(int d, int max_d)\n{{\n"
-            f"    return alloc_{callee}(d, max_d);\n"
-            f"}}\n"
-        )
+        # 2) puis les alias pointeurs simples  -----------------------------------
+        for key, fields in ptr_map.items():
+            fname    = clean_key(key)
+            # retrouve le vrai nom de struct pour appeler le bon alloc_…
+            # (on suppose qu’au moins un alias valeur possède exactement le même
+            #   tableau de champs).
+            target_alias = next(
+                k for k, v in name_map.items() if v == fields
+            )
+            callee = clean_key(target_alias)
+            if iter == 0: 
+                parts.append(f"{key} alloc_{fname}(int d, int max_d);\n")
+            else:
+                parts.append(
+                    f"{key} alloc_{fname}(int d, int max_d)\n{{\n"
+                    f"    return alloc_{callee}(d, max_d);\n"
+                    f"}}\n"
+                )
 
     return "\n".join(parts)
 
@@ -145,22 +152,48 @@ def generate_allocators(name_map: Dict[str, Fields],
 ###############################################################################
 # CLI -------------------------------------------------------------------------
 ###############################################################################
-def main(argv: List[str]) -> None:
-    if len(argv) < 2:
-        print("Usage: allocator_gen.py <file.c> [more.c ...]", file=sys.stderr)
+
+if __name__ == "__main__": # pragma: no cover
+    if len(sys.argv) < 2:
+        sys.stderr.write("Usage: script.py <source_file_or_string> [clang-args...]\n")
+        sys.stderr.write("If providing source as a string, use '-' for the first argument, then the string, e.g., script.py - \"struct A {int x;}; typedef struct A* APtr;\" \n")
         sys.exit(1)
 
-    # Agrège toutes les unités de traduction demandées
-    name_map: Dict[str, Fields] = {}
-    ptr_map: Dict[str, Fields] = {}
+    source_input = sys.argv[1]
+    
+    processed_source: str | Path
+    clang_arguments: Sequence[str]
 
-    for path in argv[1:]:
-        nm, pm = extract_structs(Path(path))
-        name_map.update(nm)
-        ptr_map.update(pm)
+    if source_input == "-" : # Read from command line string
+        if len(sys.argv) < 3:
+            sys.stderr.write("Error: Source string expected after '-'.\n")
+            sys.stderr.write("Usage: script.py - \"<source_code_string>\" [clang-args...]\n")
+            sys.exit(1)
+        processed_source = sys.argv[2]
+        clang_arguments = sys.argv[3:]
+    elif Path(source_input).is_file(): # Read from file
+        processed_source = Path(source_input)
+        clang_arguments = sys.argv[2:]
+    else: # Treat as string if not a file and not '-', this allows passing simple strings directly
+        processed_source = source_input
+        clang_arguments = sys.argv[2:] # All subsequent args are clang args
 
-    code = generate_allocators(name_map, ptr_map)
 
-
-if __name__ == "__main__":
-    main(sys.argv)
+    try:
+        nm, pm = extract_structs(processed_source, clang_arguments)
+        code = generate_allocators(nm, pm)
+        print(code)
+    except FileNotFoundError as e:
+        sys.stderr.write(f"Error: {e}\n")
+        sys.exit(1)
+    except ImportError as e:
+        sys.stderr.write(f"Import Error: {e}. Make sure libclang is installed and configured.\n")
+        sys.exit(1)
+    except RuntimeError as e:
+        sys.stderr.write(f"Runtime Error: {e}\n")
+        sys.exit(1)
+    except Exception as e:
+        sys.stderr.write(f"An unexpected error occurred: {e}\n")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

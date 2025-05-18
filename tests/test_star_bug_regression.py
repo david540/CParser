@@ -23,4 +23,7 @@ def test_no_trailing_star_on_recursive_call(tmp_path: Path):
     assert "alloc_Node*(" not in generated
 
     # La bonne forme doit être là
-    assert re.search(r"out->next\s*=\s*alloc_Node\(d \+ 1, max_d\);", generated)
+    assert re.search(r"out->next\s*=\s*alloc_struct_Node\(d \+ 1, max_d\);", generated)
+    
+    
+    assert len(name_map.keys()) == 1

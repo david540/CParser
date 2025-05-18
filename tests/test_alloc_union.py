@@ -29,6 +29,6 @@ def test_union_allocation(tmp_path):
     code = generate_allocators(name_map, ptr_map)
 
     # Verify the generated code contains union handling
-    assert "alloc_UnionStruct" in code
+    assert "alloc_struct_UnionStruct" in code
     assert "tis_alloc_safe" in code
     assert "tis_make_unknown" in code 

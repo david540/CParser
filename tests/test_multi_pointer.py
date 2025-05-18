@@ -14,3 +14,6 @@ def test_multi_pointer(tmp_path):
     assert "struct Bar" in name_map
     # double‑pointer alias **must not be recorded**
     assert "ppBar" not in ptr_map
+    
+    assert len(name_map.keys()) == 1
+    assert len(ptr_map.keys()) == 0

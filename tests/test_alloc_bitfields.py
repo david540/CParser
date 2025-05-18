@@ -24,6 +24,6 @@ def test_bitfield_allocation(tmp_path):
     code = generate_allocators(name_map, ptr_map)
 
     # Verify the generated code contains bitfield handling
-    assert "alloc_BitFieldStruct" in code
+    assert "alloc_struct_BitFieldStruct" in code
     assert "tis_alloc_safe" in code
     assert "tis_make_unknown" in code 

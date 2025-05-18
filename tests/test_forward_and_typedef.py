@@ -18,3 +18,6 @@ def test_forward_and_typedef(tmp_path):
     assert name_map["nA"] == fields
     # single‑level pointer alias present
     assert ptr_map["pA"] == fields
+    
+    assert len(name_map.keys()) == 2
+    assert len(ptr_map.keys()) == 1

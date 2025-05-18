@@ -17,3 +17,6 @@ def test_order_independent(tmp_path):
     assert name_map["Baz_t"] == fields
     # single pointer present
     assert ptr_map["pBaz"] == fields
+    
+    assert len(name_map.keys()) == 2
+    assert len(ptr_map.keys()) == 1

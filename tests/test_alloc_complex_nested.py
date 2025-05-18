@@ -35,9 +35,10 @@ def test_complex_nested_allocation(tmp_path):
     code = generate_allocators(name_map, ptr_map)
 
     # Verify the generated code contains complex nested structure handling
-    assert "alloc_Node" in code
-    assert "alloc_Tree" in code
-    assert "alloc_NodePtr" in code
-    assert "alloc_NodePtrPtr" in code
+    assert "alloc_Node(" not in code
+    assert "alloc_struct_Node(" in code
+    assert "alloc_struct_Tree(" in code
+    assert "alloc_NodePtr(" in code
+    assert "alloc_NodePtrPtr(" not in code
     assert "tis_alloc_safe" in code
     assert "tis_make_unknown" in code 

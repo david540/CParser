@@ -17,3 +17,5 @@ def test_double_pointer_exclusion(tmp_path):
     assert ptr_map["pX"] == fields
     assert "ppX" not in ptr_map
     assert "pppX" not in ptr_map
+    assert len(name_map.keys()) == 1
+    assert len(ptr_map.keys()) == 1

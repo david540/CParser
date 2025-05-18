@@ -40,3 +40,7 @@ def test_nested_complex(tmp_path):
     # Anonymous struct alias + pointer alias
     assert name_map["AnonS"] == anon_fields
     assert ptr_map["pAnonS"] == anon_fields
+    
+    
+    assert len(name_map.keys()) == 4
+    assert len(ptr_map.keys()) == 2
