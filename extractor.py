@@ -39,6 +39,13 @@ __all__ = ["extract_structs", "Fields"]
 # Helpers                                                                      #
 ###############################################################################
 
+def is_in_system_header(cursor: Cursor) -> bool:
+    location = cursor.location
+    if not location or not location.file:
+        return False
+    filepath = location.file.name
+    return filepath.startswith("/usr/include") or "lib/clang" in filepath
+
 def _ptr_depth(t: Type) -> Tuple[int, Type]:
     depth = 0
     current_type = t
@@ -157,6 +164,8 @@ def extract_structs(source: str | Path,
             if not struct_identifier: 
                 struct_identifier = cursor.spelling or f"error_anon_{decl_hash}" # pragma: no cover
 
+            if is_in_system_header(cursor):
+                return
             current_fields: Fields = []
             for field_cursor in cursor.get_children():
                 if field_cursor.kind == CursorKind.FIELD_DECL:
@@ -204,6 +213,9 @@ def extract_structs(source: str | Path,
         if cursor.kind == CursorKind.TYPEDEF_DECL:
             alias_name = cursor.spelling 
             type_of_alias = cursor.type 
+            
+            if is_in_system_header(cursor):
+                return
             
             ptr_depth, ultimate_base_type = _ptr_depth(type_of_alias)
             
