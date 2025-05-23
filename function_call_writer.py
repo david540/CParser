@@ -18,7 +18,7 @@ def generate_main_file(
     for ret_type, func_name in functions.keys():
         params = functions[(ret_type, func_name)]
         if func_name == 'main': continue
-        output.append('    {')  # New scope for each function
+        output.append('    if(rand()){')  # New scope for each function
         param_names = []
         for (var_type, var_name) in params:
             clean_type = var_type.replace('const ', '').strip()
