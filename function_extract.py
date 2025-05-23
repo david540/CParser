@@ -21,12 +21,16 @@ FUNC_RE = re.compile(
             [\w\*\s]+?             #   mots, *, espaces (non-gourmand)
         )
         \s+                        # au moins un espace
-        (?P<name>[A-Za-z_]\w*)     # nom de la fonction
-        \s*                        # espaces optionnels
+        (?P<name>                  # nom de la fonction:
+            # Ne pas matcher les mots-clés if, while, for, switch
+            (?!(?:if|while|for|switch)\b)
+            [A-Za-z_]\w* #   Identifiant C standard
+        )
+        \s* # espaces optionnels
         \(                         # parenthèse ouvrante
         (?P<args>[^)]*)            # tout sauf la ) = liste d’arguments brute
         \)                         # parenthèse fermante
-        \s*                        # espaces optionnels
+        \s* # espaces optionnels
         \{                         # seulement une accolade ouvrante (définition)
     """,
     re.VERBOSE | re.MULTILINE,
@@ -39,11 +43,16 @@ def _parse_args(arg_str: str) -> list[tuple[str, str]]:
         if raw == 'void':
             continue                    # fonction void(...)
         # On coupe sur le dernier espace : tout avant = type, après = nom
+        if '*' in raw:
+            raw = raw.replace('*', ' *')
         parts = raw.rsplit(' ', 1)
         if len(parts) == 1:             # paramètre sans nom ? ex. ‘size_t’
             print("Error: unnamed parameter in function signature:", raw, file=sys.stderr)
             #exit(255)
         else:
+            if '[' in parts[1]:
+                parts[1] = parts[1].split('[')[0]
+                parts[0] = parts[0].rstrip() + '*'
             if parts[1].startswith('*'):
                 parts[1] = parts[1].lstrip('*')
                 parts[0] = parts[0].rstrip() + '*'

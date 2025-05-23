@@ -128,6 +128,9 @@ def main() -> int:
 
     compile_db_path = Path(sys.argv[1]).resolve()
     c_files = [Path(p).resolve() for p in sys.argv[2:]]
+    
+    for s in sys.argv[2:]:
+        print(f'#include "{s}"')
 
     # --------------------------------------------------------------------- #
     # 1. Read compile_commands.json and gather front-end flags              #
