@@ -103,6 +103,7 @@ def extract_structs(source: str | Path,
     clang_args = list(clang_args or [])
 
     if isinstance(source, Path):
+        print(f"Parsing source file: {source}", file=sys.stderr)
         if not source.exists():
             raise FileNotFoundError(f"Source file not found: {source}")
         tu = Index.create().parse(
@@ -120,6 +121,11 @@ def extract_structs(source: str | Path,
     
     if not tu: # pragma: no cover
         raise RuntimeError("libclang failed to parse the translation unit.")
+    for diagnostic in tu.diagnostics:
+        if diagnostic.severity >= cindex.Diagnostic.Error:
+            print(f"ERROR: {diagnostic.location}: {diagnostic.spelling}", file=sys.stderr)
+        elif diagnostic.severity >= cindex.Diagnostic.Warning:
+            print(f"WARNING: {diagnostic.location}: {diagnostic.spelling}", file=sys.stderr)
 
     struct_fields_map: Dict[str, Fields] = {}
     struct_decl_hash_to_identifier: Dict[int, str] = {}

@@ -20,7 +20,7 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import List, Sequence
-
+from collections import OrderedDict
 # --------------------------------------------------------------------------- #
 # helpers                                                                     #
 # --------------------------------------------------------------------------- #
@@ -32,45 +32,87 @@ _PP_PREFIXES = (
     "-nostdinc", "-f", "-m", "-std=", "-x", "-Xclang",
 )
 
+_PP_PREFIXES_REQUIRING_SEP_ARG = {
+    "-I", "-isystem", "-iquote", "-idirafter",
+    "-D", "-U", "-include", "-imacros",
+    "-iprefix", "-iwithprefix", "-iwithprefixbefore",
+    "-x", "-Xclang",
+}
 
-def _extract_pp_options(tokens: Sequence[str]) -> List[str]:
+def _extract_pp_options(tokens: Sequence[str], base_directory: Path) -> List[str]:
     """
     Filter a compile-command token list, keeping only options that influence
     the pre-processor / language front-end (include paths, macros, language
-    standard, etc.).
+    standard, etc.). Specifically resolves relative paths for -I options.
 
     Parameters
     ----------
     tokens
         The tokenised compile command (not including the compiler executable).
+    base_directory
+        The directory from which relative paths in the compile command
+        should be resolved (i.e., the 'directory' field of the command entry).
 
     Returns
     -------
     List[str]
-        Tokens relevant to Clang's front-end.
+        Tokens relevant to Clang's front-end, with relative -I paths resolved.
     """
     pp: List[str] = []
-    it = iter(tokens)
+    it = iter(tokens) # Create an iterator for easy `next()`
 
     for tok in it:
-        # Match an option that begins with one of the recognised prefixes.
+        # Case 1: Option is exactly "-I" (takes a separate path argument)
+        if tok == "-I":
+            pp.append(tok)  # Append "-I"
+            try:
+                path_arg = next(it)
+                path_obj = Path(path_arg)
+                # Resolve if relative and not a variable-like path (e.g. starting with '$')
+                if not path_obj.is_absolute() and not path_arg.startswith("$"):
+                    resolved_path = (base_directory / path_obj).resolve()
+                    pp.append(resolved_path.as_posix())
+                else:
+                    pp.append(path_arg)  # Keep absolute path or variable path as is
+            except StopIteration:
+                sys.stderr.write(f"Warning: Expected path argument for '-I' but found none.\n")
+                break  # Stop processing this command's tokens
+            continue # Processed this token and its argument, move to next token
+
+        # Case 2: Option starts with "-I" and path is concatenated (e.g., -I../include or -I/abs/path)
+        # Ensure it's not just "-I" itself (len > 2)
+        elif tok.startswith("-I") and len(tok) > 2:
+            prefix = "-I"
+            path_part = tok[len(prefix):]
+            path_obj = Path(path_part)
+            if not path_obj.is_absolute() and not path_part.startswith("$"):
+                resolved_path = (base_directory / path_obj).resolve()
+                pp.append(f"{prefix}{resolved_path.as_posix()}")
+            else:
+                pp.append(tok)  # Keep original form (e.g. -I/abs/path or -I$SYSROOT/path)
+            continue # Processed this token, move to next token
+
+        # Case 3: Other pre-processor options (macros, other includes, standards, etc.)
+        # Check if the token starts with any of the known general pre-processor prefixes.
+        # This handles options like -isystem, -D, -DMACRO, -std=c99, -Xclang, etc.
         if any(tok.startswith(pref) for pref in _PP_PREFIXES):
             pp.append(tok)
-
-            # Handle options that take a *separate* argument (e.g. “-I path”).
-            if tok in {
-                "-I", "-isystem", "-iquote", "-idirafter",
-                "-imacros", "-include", "-U", "-D",
-                "-iprefix", "-iwithprefix", "-iwithprefixbefore",
-            }:
+            # If the token *is* one that requires a separate argument
+            # (e.g., tok is "-D", not "-DMACRO"; tok is "-isystem", not "-isystem/path")
+            # Note: "-I" is in _PP_PREFIXES_REQUIRING_SEP_ARG, but it's handled by Case 1 due to `continue`.
+            if tok in _PP_PREFIXES_REQUIRING_SEP_ARG:
                 try:
+                    # Append the next token as the argument for the current option.
                     pp.append(next(it))
                 except StopIteration:
-                    # Malformed compile_commands.json entry – ignore gracefully.
-                    break
+                    sys.stderr.write(f"Warning: Expected argument for '{tok}' but found none.\n")
+                    break # Stop processing this command's tokens
+            # If tok.startswith(pref) but tok is not in _PP_PREFIXES_REQUIRING_SEP_ARG,
+            # it means the argument is part of the token itself (e.g., -DMACRO, -std=c99),
+            # or it's a flag without an argument (e.g., -nostdinc).
+            # In these cases, only `tok` is added, which is correct.
 
     return pp
-
 
 # --------------------------------------------------------------------------- #
 # main                                                                         #
@@ -103,7 +145,7 @@ def main() -> int:
         if entry_file not in c_files:
             # Ignore unrelated translation units.
             continue
-
+        root_path = entry.get("directory", "")
         if "arguments" in entry:
             tokens: Sequence[str] = entry["arguments"]
         elif "command" in entry:
@@ -114,7 +156,9 @@ def main() -> int:
         else:  # pragma: no cover
             continue
 
-        clang_arguments.extend(_extract_pp_options(tokens))
+        clang_arguments.extend(_extract_pp_options(tokens, root_path))
+        
+    
 
     # Deduplicate while preserving order.
     seen: set[str] = set()
@@ -135,11 +179,20 @@ def main() -> int:
     # --------------------------------------------------------------------- #
     from extractor import extract_structs  # type: ignore
     from allocator_gen import generate_allocators  # type: ignore
-
+    from function_call_writer import generate_main_file  # type: ignore
+    from function_extract import extract_funcs  # type: ignore
+    
     nm, pm = extract_structs(processed_source, clang_arguments)
-    generated = generate_allocators(nm, pm)
-    print(generated)
-
+    print (nm, file=sys.stderr)
+    funcs: dict[tuple[str, str], list[tuple[str, str]]] = OrderedDict()
+    for path in sys.argv[1:]:
+        text = Path(path).read_text(encoding='utf-8', errors='ignore')
+        funcs.update(extract_funcs(text))
+    generated_allocs = generate_allocators(nm, pm)
+    print(generated_allocs)
+    #print(funcs)
+    generated_main = generate_main_file(funcs, nm, pm)
+    print(generated_main)
     return 0
 
 
