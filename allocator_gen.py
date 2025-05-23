@@ -53,16 +53,24 @@ def is_struct_type(type_str: str, struct_names: set[str]) -> bool:
 # génération ------------------------------------------------------------------
 ###############################################################################
 PRELUDE = """\
-//#include <stddef.h>
-//extern void *tis_alloc_safe(size_t);
-//extern void  tis_make_unknown(void*, size_t);
+#include <stdlib.h>
+void* auto_alloc_safe(size_t size){
+    void* out = malloc(size);
+    if (out == NULL) { exit(1); }
+    return out;
+}
+void auto_make_unknown(void* data, size_t size){
+    for (size_t i = 0; i < size; i++) {
+        ((char*)data)[i] = (char)(rand() % 256);
+    }
+}
 """
 
 ALLOC_TPL = """\
 {ret_type} alloc_{fname}(int d, int max_d)
 {{
-    {struct_type} out = ({struct_type})tis_alloc_safe(sizeof(*out));
-    tis_make_unknown(out, sizeof(*out));
+    {struct_type} out = ({struct_type})auto_alloc_safe(sizeof(*out));
+    auto_make_unknown(out, sizeof(*out));
 {body}
     return out;
 }}
@@ -91,10 +99,10 @@ def make_body(fields: Fields,
         # ---- sinon : mémoire inconnue ---------------------------------------
         elif depth == 1 and not "[" in f_type and not "[" in f_name:
             lines.append(
-                f"    out->{f_name} = tis_alloc_safe(128);"
+                f"    out->{f_name} = auto_alloc_safe(128);"
             )
             lines.append(
-                f"    tis_make_unknown(out->{f_name}, 128);"
+                f"    auto_make_unknown(out->{f_name}, 128);"
             )
         else:
             # champ scalaire : rien à faire, on l’a déjà « unknown-é »

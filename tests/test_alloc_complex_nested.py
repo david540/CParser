@@ -40,5 +40,5 @@ def test_complex_nested_allocation(tmp_path):
     assert "alloc_struct_Tree(" in code
     assert "alloc_NodePtr(" in code
     assert "alloc_NodePtrPtr(" not in code
-    assert "tis_alloc_safe" in code
-    assert "tis_make_unknown" in code 
+    assert "auto_alloc_safe" in code
+    assert "auto_make_unknown" in code 

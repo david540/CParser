@@ -25,5 +25,5 @@ def test_bitfield_allocation(tmp_path):
 
     # Verify the generated code contains bitfield handling
     assert "alloc_struct_BitFieldStruct" in code
-    assert "tis_alloc_safe" in code
-    assert "tis_make_unknown" in code 
+    assert "auto_alloc_safe" in code
+    assert "auto_make_unknown" in code 

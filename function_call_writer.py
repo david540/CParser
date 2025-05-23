@@ -29,7 +29,7 @@ def generate_main_file(
                     output.append(f'        {clean_type} {var_name} = alloc_{struct_name}(0, 5);')
                 elif struct_name not in pm:
                     output.append(f'        {clean_type} {var_name} = malloc(32);')
-                    output.append(f'        tis_make_unknown({var_name}, 32);')
+                    output.append(f'        auto_make_unknown({var_name}, 32);')
             else:
                 if struct_name in nm:
                     output.append(f'        {clean_type} {var_name};')
@@ -42,7 +42,7 @@ def generate_main_file(
                     output.append(f'        {var_name} = tis_nondet(0, 1);')
                 else:
                     output.append(f'        {clean_type} {var_name};')
-                    output.append(f'        tis_make_unknown(&{var_name}, sizeof({clean_type}));')
+                    output.append(f'        auto_make_unknown(&{var_name}, sizeof({clean_type}));')
 
         param_str = ', '.join(param_names)
         output.append(f'        {func_name}({param_str});')
